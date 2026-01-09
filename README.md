@@ -1,4 +1,4 @@
-# AVATAR CREATOR COPIER (Local Overlay Avatar Copy)
+# AVATAR CREATOR COPIER (Local Overlay Avatar Copy) ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=Kixdev.avatar-copier-roblox&left_text=Visitors&style=flat)
 
 A **client-side (local-only)** Roblox dev tool that lets you **visually copy any player’s avatar** by spawning a **local overlay clone** of their character model. The overlay follows your HumanoidRootPart smoothly and mirrors your pose/animations, so it looks like you “became” that avatar - **without changing your real Roblox account avatar** and **without other players seeing anything**.
 
