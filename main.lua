@@ -17,8 +17,11 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
 
 --==================================================
 -- STATE
@@ -29,6 +32,7 @@ local dragStart, startPos = nil, nil
 
 local searching = false
 local applying = false
+local resetting = false
 local currentTarget = nil
 local selectedPackName = nil
 
@@ -335,7 +339,7 @@ end
 local function ensureIdleSlots(idleFolder, n)
 	if not idleFolder then return end
 	n = n or 2
-	for i=1,n do
+	for i = 1, n do
 		ensureAnim(idleFolder, "Animation" .. i)
 	end
 end
@@ -364,6 +368,158 @@ local function waitForCharacterReady()
 	end
 
 	return character, humanoid
+end
+
+local function waitForPart(character, partName, timeout)
+	timeout = timeout or 5
+	local part = character:FindFirstChild(partName)
+	if part then return part end
+
+	local start = tick()
+	while tick() - start < timeout do
+		part = character:FindFirstChild(partName)
+		if part then
+			return part
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+
+local function captureRootState(character)
+	if not character then return nil end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return nil end
+
+	return {
+		CFrame = hrp.CFrame,
+		AssemblyLinearVelocity = hrp.AssemblyLinearVelocity,
+		AssemblyAngularVelocity = hrp.AssemblyAngularVelocity,
+	}
+end
+
+local function restoreRootState(character, state)
+	if not character or not state then return end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	pcall(function()
+		hrp.Anchored = false
+		hrp.CFrame = state.CFrame
+		hrp.AssemblyLinearVelocity = state.AssemblyLinearVelocity or Vector3.zero
+		hrp.AssemblyAngularVelocity = state.AssemblyAngularVelocity or Vector3.zero
+	end)
+end
+
+local function forceRootFollowRestore(character, state)
+	if not character or not state then return end
+
+	restoreRootState(character, state)
+	RunService.Heartbeat:Wait()
+	restoreRootState(character, state)
+	task.wait(0.05)
+	restoreRootState(character, state)
+	task.wait(0.1)
+	restoreRootState(character, state)
+end
+
+local function restoreDisplayName(humanoid)
+	if not humanoid then return end
+	pcall(function()
+		humanoid.DisplayName = player.DisplayName
+	end)
+	task.wait(0.03)
+	pcall(function()
+		humanoid.DisplayName = player.DisplayName
+	end)
+end
+
+local function rebindCameraAndCharacter(character, humanoid)
+	if not character or not humanoid then return end
+
+	local hrp = waitForPart(character, "HumanoidRootPart", 5)
+	local head = waitForPart(character, "Head", 5)
+
+	if hrp then
+		pcall(function()
+			character.PrimaryPart = hrp
+		end)
+	end
+
+	pcall(function()
+		humanoid.AutoRotate = true
+	end)
+
+	if camera then
+		pcall(function()
+			camera.CameraSubject = humanoid
+		end)
+	end
+
+	if head then
+		pcall(function()
+			head.CanCollide = false
+		end)
+	end
+end
+
+local function refreshSpatialPresence(character, humanoid, rootState)
+	if not character or not humanoid then return end
+
+	local hrp = waitForPart(character, "HumanoidRootPart", 5)
+	local head = waitForPart(character, "Head", 5)
+
+	rebindCameraAndCharacter(character, humanoid)
+
+	if rootState and hrp then
+		restoreRootState(character, rootState)
+	end
+
+	if hrp then
+		local baseCF = hrp.CFrame
+		local baseLV = hrp.AssemblyLinearVelocity
+		local baseAV = hrp.AssemblyAngularVelocity
+
+		pcall(function()
+			hrp.CFrame = baseCF + Vector3.new(0, 0.025, 0)
+		end)
+		RunService.Heartbeat:Wait()
+		pcall(function()
+			hrp.CFrame = baseCF
+			hrp.AssemblyLinearVelocity = baseLV
+			hrp.AssemblyAngularVelocity = baseAV
+		end)
+
+		RunService.Heartbeat:Wait()
+		pcall(function()
+			hrp.CFrame = baseCF
+			hrp.AssemblyLinearVelocity = baseLV
+			hrp.AssemblyAngularVelocity = baseAV
+		end)
+	end
+
+	if head then
+		pcall(function()
+			head.CFrame = head.CFrame
+		end)
+	end
+
+	restoreDisplayName(humanoid)
+
+	pcall(function()
+		humanoid:Move(Vector3.zero, false)
+	end)
+
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end)
+	RunService.Heartbeat:Wait()
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	end)
+
+	rebindCameraAndCharacter(character, humanoid)
+	restoreDisplayName(humanoid)
 end
 
 --==================================================
@@ -404,7 +560,7 @@ local function applyPack(packName)
 	setAnim(jumpObj,  pick(pack, "JumpAnim", "Jump"))
 	setAnim(fallObj,  pick(pack, "FallAnim", "Fall"))
 	setAnim(climbObj, pick(pack, "ClimbAnim", "Climb"))
-	setAnim(swimObj, pick(pack, "Swim"))
+	setAnim(swimObj,  pick(pack, "Swim"))
 	setAnim(swimIdleObj, pick(pack, "SwimIdle") or pick(pack, "Swim"))
 
 	if idleFolder then
@@ -508,7 +664,7 @@ local function resolveTarget(query)
 end
 
 --==================================================
--- MORPH APPLY
+-- MORPH / RESET APPLY
 --==================================================
 local originalDesc = nil
 do
@@ -554,21 +710,17 @@ local function clearOldAppearance(character)
 	end
 end
 
-local function morphToUserId(userId, targetName, targetThumb)
-	if not userId then return false, "No target." end
-	if userId == player.UserId then return false, "Cannot morph to yourself." end
+local function applyDescriptionPreserveRoot(desc)
+	if not desc then
+		return false, "No description."
+	end
 
 	local character, humanoid = waitForCharacterReady()
 	if not humanoid then
 		return false, "Failed to find humanoid."
 	end
 
-	local okDesc, desc = pcall(function()
-		return Players:GetHumanoidDescriptionFromUserId(userId)
-	end)
-	if not okDesc or not desc then
-		return false, "Failed to load avatar data."
-	end
+	local rootState = captureRootState(character)
 
 	stopAllTracks(humanoid)
 	clearOldAppearance(character)
@@ -577,19 +729,74 @@ local function morphToUserId(userId, targetName, targetThumb)
 
 	local okApply = applyDescriptionToHumanoid(humanoid, desc)
 	if not okApply then
-		if originalDesc then
-			pcall(function()
-				applyDescriptionToHumanoid(humanoid, originalDesc)
-			end)
-		end
 		return false, "Failed to apply avatar."
 	end
 
 	task.wait(0.2)
 
+	forceRootFollowRestore(character, rootState)
+	refreshSpatialPresence(character, humanoid, rootState)
+
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end)
+	task.wait(0.03)
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	end)
+
+	refreshSpatialPresence(character, humanoid, rootState)
+
+	return true, nil
+end
+
+local function morphToUserId(userId, targetName, targetThumb)
+	if not userId then return false, "No target." end
+	if userId == player.UserId then return false, "Cannot morph to yourself." end
+
+	local okDesc, desc = pcall(function()
+		return Players:GetHumanoidDescriptionFromUserId(userId)
+	end)
+	if not okDesc or not desc then
+		return false, "Failed to load avatar data."
+	end
+
+	local okApply, err = applyDescriptionPreserveRoot(desc)
+	if not okApply then
+		if originalDesc then
+			pcall(function()
+				applyDescriptionPreserveRoot(originalDesc)
+			end)
+		end
+		return false, err or "Failed to apply avatar."
+	end
+
+	task.wait(0.15)
 	reapplySelectedPack()
 
+	local character, humanoid = waitForCharacterReady()
+	local rootState = captureRootState(character)
+	refreshSpatialPresence(character, humanoid, rootState)
+
 	sendNotif("Avatar Changer", "Successfully copied " .. (targetName or "target") .. "!", targetThumb or "")
+	return true, nil
+end
+
+local function resetToOriginalAvatar()
+	if not originalDesc then
+		return false, "Original avatar data not available."
+	end
+
+	local okApply, err = applyDescriptionPreserveRoot(originalDesc)
+	if not okApply then
+		return false, err or "Failed to reset avatar."
+	end
+
+	local character, humanoid = waitForCharacterReady()
+	local rootState = captureRootState(character)
+	refreshSpatialPresence(character, humanoid, rootState)
+
+	sendNotif("Avatar Changer", "Avatar reset to default.", "")
 	return true, nil
 end
 
@@ -626,8 +833,8 @@ if not parentOk then
 end
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 390, 0, 440)
-frame.Position = UDim2.new(0.5, -195, 0.5, -190)
+frame.Size = UDim2.new(0, 390, 0, 478)
+frame.Position = UDim2.new(0.5, -195, 0.5, -209)
 frame.BackgroundColor3 = BLACK
 frame.BackgroundTransparency = 1 - MENU_ALPHA
 frame.BorderSizePixel = 0
@@ -866,7 +1073,7 @@ end
 
 local updateBtn = Instance.new("TextButton")
 updateBtn.Size = UDim2.new(1, -20, 0, 30)
-updateBtn.Position = UDim2.new(0, 10, 1, -35)
+updateBtn.Position = UDim2.new(0, 10, 1, -73)
 updateBtn.Text = "Copy Avatar"
 updateBtn.Font = Enum.Font.GothamBold
 updateBtn.TextSize = 14
@@ -876,7 +1083,20 @@ updateBtn.Parent = frame
 updateBtn:SetAttribute("BaseColor", updateBtn.BackgroundColor3)
 Instance.new("UICorner", updateBtn).CornerRadius = UDim.new(0, 8)
 
+local stopBtn = Instance.new("TextButton")
+stopBtn.Size = UDim2.new(1, -20, 0, 30)
+stopBtn.Position = UDim2.new(0, 10, 1, -37)
+stopBtn.Text = "Stop Script"
+stopBtn.Font = Enum.Font.GothamBold
+stopBtn.TextSize = 14
+stopBtn.TextColor3 = WHITE
+stopBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 45)
+stopBtn.Parent = frame
+stopBtn:SetAttribute("BaseColor", stopBtn.BackgroundColor3)
+Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 8)
+
 setButtonEnabled(updateBtn, false)
+setButtonEnabled(stopBtn, originalDesc ~= nil)
 filterPackButtons("")
 updatePackLabel()
 
@@ -922,8 +1142,9 @@ miniBtn.MouseButton1Click:Connect(function()
 		packSearch.Visible = false
 		listFrame.Visible = false
 		updateBtn.Visible = false
+		stopBtn.Visible = false
 	else
-		frame.Size = UDim2.new(0, 390, 0, 440)
+		frame.Size = UDim2.new(0, 390, 0, 478)
 		miniBtn.Text = "-"
 		usernameInput.Visible = true
 		searchBtn.Visible = true
@@ -932,6 +1153,7 @@ miniBtn.MouseButton1Click:Connect(function()
 		packSearch.Visible = true
 		listFrame.Visible = true
 		updateBtn.Visible = true
+		stopBtn.Visible = true
 	end
 end)
 
@@ -946,7 +1168,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-for _, b in ipairs({searchBtn, updateBtn}) do
+for _, b in ipairs({searchBtn, updateBtn, stopBtn}) do
 	b.MouseEnter:Connect(function() hoverTween(b, true) end)
 	b.MouseLeave:Connect(function() hoverTween(b, false) end)
 end
@@ -1000,7 +1222,7 @@ local function doSearch()
 end
 
 local function doUpdate()
-	if applying then return end
+	if applying or resetting then return end
 	if not currentTarget then
 		sendNotif("Morph Avatar", "Search target dulu.", "")
 		return
@@ -1008,6 +1230,7 @@ local function doUpdate()
 
 	applying = true
 	setButtonEnabled(updateBtn, false)
+	setButtonEnabled(stopBtn, false)
 	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 	statusLabel.Text = "Status: applying..."
 
@@ -1015,24 +1238,49 @@ local function doUpdate()
 	if ok then
 		statusLabel.TextColor3 = GREEN
 		statusLabel.Text = "Status: applied"
-		if selectedPackName then
-			task.delay(0.35, function()
-				applyPack(selectedPackName)
-				updatePackLabel()
-			end)
-		end
-	else
+	end
+	if not ok then
 		statusLabel.TextColor3 = Color3.fromRGB(200, 80, 80)
 		statusLabel.Text = "Status: " .. (err or "failed")
 		sendNotif("Morph Avatar", err or "Failed to apply.", "")
-		setButtonEnabled(updateBtn, true)
 	end
 
+	setButtonEnabled(updateBtn, currentTarget ~= nil)
+	setButtonEnabled(stopBtn, originalDesc ~= nil)
 	applying = false
+end
+
+local function doStopScript()
+	if resetting or applying then return end
+	if not originalDesc then
+		sendNotif("Stop Script", "Original avatar data not available.", "")
+		return
+	end
+
+	resetting = true
+	setButtonEnabled(updateBtn, false)
+	setButtonEnabled(stopBtn, false)
+	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+	statusLabel.Text = "Status: resetting to default..."
+
+	local ok, err = resetToOriginalAvatar()
+	if ok then
+		statusLabel.TextColor3 = GREEN
+		statusLabel.Text = "Status: default avatar restored"
+	else
+		statusLabel.TextColor3 = Color3.fromRGB(200, 80, 80)
+		statusLabel.Text = "Status: " .. (err or "reset failed")
+		sendNotif("Stop Script", err or "Failed to reset avatar.", "")
+	end
+
+	setButtonEnabled(updateBtn, currentTarget ~= nil)
+	setButtonEnabled(stopBtn, originalDesc ~= nil)
+	resetting = false
 end
 
 searchBtn.MouseButton1Click:Connect(doSearch)
 updateBtn.MouseButton1Click:Connect(doUpdate)
+stopBtn.MouseButton1Click:Connect(doStopScript)
 
 usernameInput.FocusLost:Connect(function(enterPressed)
 	if enterPressed then
@@ -1049,15 +1297,30 @@ end)
 --==================================================
 player.CharacterAdded:Connect(function()
 	task.wait(0.8)
+
+	local character, humanoid = waitForCharacterReady()
+	local rootState = captureRootState(character)
+
+	refreshSpatialPresence(character, humanoid, rootState)
+
 	local saved = player:GetAttribute(ATTR_LAST)
 	if type(saved) == "string" and saved ~= "" and PACKS[saved] then
 		selectedPackName = saved
 		updatePackLabel()
 		applyPack(saved)
 	end
+
+	local newChar, newHum = waitForCharacterReady()
+	local newRootState = captureRootState(newChar)
+	refreshSpatialPresence(newChar, newHum, newRootState)
 end)
 
 task.defer(function()
+	local character, humanoid = waitForCharacterReady()
+	local rootState = captureRootState(character)
+
+	refreshSpatialPresence(character, humanoid, rootState)
+
 	local saved = player:GetAttribute(ATTR_LAST)
 	if type(saved) == "string" and saved ~= "" and PACKS[saved] then
 		selectedPackName = saved
@@ -1065,4 +1328,8 @@ task.defer(function()
 		task.wait(0.2)
 		applyPack(saved)
 	end
+
+	local newChar, newHum = waitForCharacterReady()
+	local newRootState = captureRootState(newChar)
+	refreshSpatialPresence(newChar, newHum, newRootState)
 end)
