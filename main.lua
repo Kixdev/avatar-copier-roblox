@@ -1,1329 +1,1068 @@
 --==================================================
--- LOCAL OVERLAY AVATAR
--- - Client-only overlay: only YOU can see it
+-- THEME
 --==================================================
+local BLACK       = Color3.fromRGB(15, 15, 15)
+local DARK_GRAY   = Color3.fromRGB(35, 35, 35)
+local MID_GRAY    = Color3.fromRGB(55, 55, 55)
+local WHITE       = Color3.fromRGB(255, 255, 255)
+local RED         = Color3.fromRGB(200, 50, 50)
+local GREEN       = Color3.fromRGB(50, 180, 50)
+local MENU_ALPHA  = 0.95
 
+--==================================================
+-- SERVICES
+--==================================================
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
 
---==================== CONFIG ======================
-local FONT_UI = Enum.Font.GothamBold
-local OVERLAY_FOLDER_NAME = "_LocalAvatarOverlay"
-local DEFAULT_OFFSET = CFrame.new(0, 0, 0)
+--==================================================
+-- STATE
+--==================================================
+local minimized = false
+local draggingTitleBar = false
+local dragStart, startPos = nil, nil
 
---==================== UI helpers ====================
-local function setCorner(inst, px)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, px)
-	c.Parent = inst
-	return c
+local searching = false
+local applying = false
+local currentTarget = nil
+local selectedPackName = nil
+
+local ATTR_LAST = "MergedAnimPack_Last"
+
+--==================================================
+-- PACK DATABASE
+--==================================================
+local PACKS = {
+	["Adidas Sports"] = {
+		WalkAnim = 18537392113,
+		RunAnim  = 18537384940,
+		JumpAnim = 18537380791,
+		FallAnim = 18537367238,
+		SwimIdle = 18537387180,
+		Swim     = 18537389531,
+		Animation1 = 18537376492,
+		Animation2 = 18537371272,
+		ClimbAnim = 18537363391,
+	},
+	["Adidas Community"] = {
+		WalkAnim = 122150855457006,
+		RunAnim  = 82598234841035,
+		JumpAnim = 75290611992385,
+		FallAnim = 98600215928904,
+		SwimIdle = 109346520324160,
+		Swim     = 133308483266208,
+		Animation1 = 122257458498464,
+		Animation2 = 102357151005774,
+		ClimbAnim = 88763136693023,
+	},
+	["Adidas Aura"] = {
+		WalkAnim = 83842218823011,
+		RunAnim  = 118320322718866,
+		JumpAnim = 109996626521204,
+		FallAnim = 95603166884636,
+		SwimIdle = 94922130551805,
+		Swim     = 134530128383903,
+		Animation1 = 110211186840347,
+		Animation2 = 114191137265065,
+		ClimbAnim = 97824616490448,
+	},
+	Elder = {
+		WalkAnim = 10921111375,
+		RunAnim  = 10921104374,
+		JumpAnim = 10921107367,
+		FallAnim = 10921105765,
+		SwimIdle = 10921110146,
+		Swim     = 10921108971,
+		ClimbAnim = 10921100400,
+		Animation1 = 10921101664,
+		Animation2 = 10921102574,
+	},
+	Zombie = {
+		WalkAnim = 10921355261,
+		RunAnim  = 616163682,
+		JumpAnim = 10921351278,
+		FallAnim = 10921350320,
+		SwimIdle = 10921353442,
+		Swim     = 10921352344,
+		Animation1 = 10921344533,
+		Animation2 = 10921345304,
+		ClimbAnim = 10921343576,
+	},
+	Mage = {
+		WalkAnim = 10921152678,
+		RunAnim  = 10921148209,
+		JumpAnim = 10921149743,
+		FallAnim = 10921148939,
+		SwimIdle = 10921151661,
+		Swim     = 10921150788,
+		ClimbAnim = 10921143404,
+		Animation1 = 10921144709,
+		Animation2 = 10921145797,
+	},
+	["Catwalk Glam"] = {
+		WalkAnim = 109168724482748,
+		RunAnim  = 81024476153754,
+		JumpAnim = 116936326516985,
+		FallAnim = 92294537340807,
+		SwimIdle = 98854111361360,
+		Swim     = 134591743181628,
+		ClimbAnim = 119377220967554,
+		Animation1 = 133806214992291,
+		Animation2 = 94970088341563,
+	},
+	Astronaut = {
+		WalkAnim = 10921046031,
+		RunAnim  = 10921039308,
+		JumpAnim = 10921042494,
+		FallAnim = 10921040576,
+		SwimIdle = 10921045006,
+		Swim     = 10921044000,
+		ClimbAnim = 10921032124,
+		Animation1 = 10921034824,
+		Animation2 = 10921036806,
+	},
+	['Wicked "Dancing Through Life"'] = {
+		WalkAnim = 73718308412641,
+		RunAnim  = 135515454877967,
+		JumpAnim = 78508480717326,
+		FallAnim = 78147885297412,
+		SwimIdle = 129183123083281,
+		Swim     = 110657013921774,
+		ClimbAnim = 129447497744818,
+		Animation1 = 92849173543269,
+		Animation2 = 132238900951109,
+	},
+	Werewolf = {
+		WalkAnim = 10921342074,
+		RunAnim  = 10921336997,
+		JumpAnim = nil,
+		FallAnim = 10921337907,
+		SwimIdle = 10921341319,
+		Swim     = 10921340419,
+		ClimbAnim = 10921329322,
+		Animation1 = 10921330408,
+		Animation2 = 10921333667,
+	},
+	Superhero = {
+		WalkAnim = 10921298616,
+		RunAnim  = 10921291831,
+		JumpAnim = 10921294559,
+		FallAnim = 10921293373,
+		SwimIdle = 10921297391,
+		Swim     = 10921295495,
+		ClimbAnim = 10921286911,
+		Animation1 = 10921288909,
+		Animation2 = 10921290167,
+	},
+	Toy = {
+		WalkAnim = 10921312010,
+		RunAnim  = 10921306285,
+		JumpAnim = 10921308158,
+		FallAnim = 10921307241,
+		SwimIdle = 10921310341,
+		Swim     = 10921309319,
+		ClimbAnim = 10921300839,
+		Animation1 = 10921301576,
+		Animation2 = nil,
+	},
+	["No Boundaries"] = {
+		WalkAnim = 18747074203,
+		RunAnim  = 18747070484,
+		JumpAnim = 18747069148,
+		FallAnim = 18747062535,
+		SwimIdle = 18747071682,
+		Swim     = 18747073181,
+		ClimbAnim = 18747060903,
+		Animation1 = 18747067405,
+		Animation2 = 18747063918,
+	},
+	NFL = {
+		WalkAnim = 110358958299415,
+		RunAnim  = 117333533048078,
+		JumpAnim = 119846112151352,
+		FallAnim = 129773241321032,
+		SwimIdle = 79090109939093,
+		Swim     = 132697394189921,
+		ClimbAnim = 134630013742019,
+		Animation1 = 92080889861410,
+		Animation2 = 74451233229259,
+	},
+	["Amazon Unboxed"] = {
+		WalkAnim = 90478085024465,
+		RunAnim  = 134824450619865,
+		JumpAnim = 121454505477205,
+		FallAnim = 94788218468396,
+		SwimIdle = 129126268464847,
+		Swim     = 105962919001086,
+		ClimbAnim = 121145883950231,
+		Animation1 = 98281136301627,
+		Animation2 = nil,
+	},
+	Vampire = {
+		WalkAnim = 10921326949,
+		RunAnim  = 10921320299,
+		JumpAnim = 10921322186,
+		FallAnim = 10921321317,
+		SwimIdle = 10921325443,
+		Swim     = 10921324408,
+		ClimbAnim = 10921314188,
+		Animation1 = 10921315373,
+		Animation2 = nil,
+	},
+	["Ninja"] = {
+		Run=656118852, Walk=656121766, Jump=656117878, Fall=656115606,
+		Swim=656119721, SwimIdle=656121397, Climb=656114359,
+		Idle={656117400,656118341,886742569}
+	},
+	["Robot"] = {
+		Run=616091570, Walk=616095330, Jump=616090535, Fall=616087089,
+		Swim=616092998, SwimIdle=616094091, Climb=616086039,
+		Idle={616088211,616089559,885531463}
+	},
+	["Levitation"] = {
+		Run=616010382, Walk=616013216, Jump=616008936, Fall=616005863,
+		Swim=616011509, SwimIdle=616012453, Climb=616003713,
+		Idle={616006778,616008087,886862142}
+	},
+	["Stylish"] = {
+		Run=616140816, Walk=616146177, Jump=616139451, Fall=616134815,
+		Swim=616143378, SwimIdle=616144772, Climb=616133594,
+		Idle={616136790,616138447,886888594}
+	},
+	["Bubbly"] = {
+		Run=910025107, Walk=910034870, Jump=910016857, Fall=910001910,
+		Swim=910028158, SwimIdle=910030921, Climb=909997997,
+		Idle={910004836,910009958,1018536639}
+	},
+	["Cartoon"] = {
+		Run=742638842, Walk=742640026, Jump=742637942, Fall=742637151,
+		Swim=742639220, SwimIdle=742639812, Climb=742636889,
+		Idle={742637544,742638445,885477856}
+	},
+}
+
+local orderedPackNames = {}
+for name in pairs(PACKS) do
+	table.insert(orderedPackNames, name)
+end
+table.sort(orderedPackNames, function(a, b)
+	return a:lower() < b:lower()
+end)
+
+--==================================================
+-- UTILS
+--==================================================
+local function sendNotif(titleT, textT, image)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = titleT,
+			Text = textT,
+			Duration = 5,
+			Icon = image or ""
+		})
+	end)
 end
 
-local function applyButtonFX(btn, normalColor, hoverColor, pressColor)
-	btn.BackgroundColor3 = normalColor
-	btn.AutoButtonColor = false
-	local originalSize = btn.Size
-
-	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundColor3 = hoverColor
-		}):Play()
-	end)
-
-	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundColor3 = normalColor,
-			Size = originalSize
-		}):Play()
-	end)
-
-	btn.MouseButton1Down:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundColor3 = pressColor,
-			Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset - 4, originalSize.Y.Scale, originalSize.Y.Offset - 4)
-		}):Play()
-	end)
-
-	btn.MouseButton1Up:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundColor3 = hoverColor,
-			Size = originalSize
-		}):Play()
-	end)
+local function isAllDigits(str)
+	return typeof(str) == "string" and str:match("^%d+$") ~= nil
 end
 
-local function makeDraggable(dragHandle, targetFrame)
-	local dragging = false
-	local dragStart, startPos
-	local dragInput
+local function trim(s)
+	return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
 
-	local function beginDrag(input)
-		dragging = true
-		dragStart = input.Position
-		startPos = targetFrame.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
+local function hoverTween(btn, on)
+	local goal = {}
+	if on then
+		goal.BackgroundColor3 = Color3.fromRGB(
+			math.clamp(btn.BackgroundColor3.R * 255 + 15, 0, 255),
+			math.clamp(btn.BackgroundColor3.G * 255 + 15, 0, 255),
+			math.clamp(btn.BackgroundColor3.B * 255 + 15, 0, 255)
+		)
+	else
+		goal.BackgroundColor3 = btn:GetAttribute("BaseColor") or btn.BackgroundColor3
+	end
+	TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal):Play()
+end
+
+local function setButtonEnabled(btn, enabled)
+	btn.AutoButtonColor = enabled
+	btn.Active = enabled
+	btn.BackgroundTransparency = enabled and 0 or 0.45
+	btn.TextTransparency = enabled and 0 or 0.35
+end
+
+local function waitForAnimate(char)
+	for _ = 1, 50 do
+		local a = char:FindFirstChild("Animate")
+		if a and a:FindFirstChild("idle") and a:FindFirstChild("run") and a:FindFirstChild("walk") then
+			return a
+		end
+		task.wait(0.1)
+	end
+	return nil
+end
+
+local function setAnim(animObj, id)
+	if animObj and id then
+		animObj.AnimationId = "rbxassetid://" .. tostring(id)
+	end
+end
+
+local function stopAllTracks(hum)
+	if not hum then return end
+	for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+		pcall(function() t:Stop(0) end)
+	end
+end
+
+local function ensureAnim(folder, name)
+	if not folder then return nil end
+	local a = folder:FindFirstChild(name)
+	if not a then
+		a = Instance.new("Animation")
+		a.Name = name
+		a.Parent = folder
+	end
+	return a
+end
+
+local function ensureIdleSlots(idleFolder, n)
+	if not idleFolder then return end
+	n = n or 2
+	for i=1,n do
+		ensureAnim(idleFolder, "Animation" .. i)
+	end
+end
+
+local function pick(pack, ...)
+	for i = 1, select("#", ...) do
+		local k = select(i, ...)
+		local v = pack[k]
+		if v ~= nil then return v end
+	end
+	return nil
+end
+
+local function waitForCharacterReady()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if not humanoid then
+		return character, nil
+	end
+
+	for _ = 1, 30 do
+		if character.Parent and humanoid.Parent then
+			break
+		end
+		task.wait(0.1)
+	end
+
+	return character, humanoid
+end
+
+--==================================================
+-- ANIMATION APPLY
+--==================================================
+local animApplying = false
+
+local function applyPack(packName)
+	if animApplying then return false end
+	animApplying = true
+
+	local pack = PACKS[packName]
+	if not pack then
+		animApplying = false
+		return false
+	end
+
+	local char, hum = waitForCharacterReady()
+	local animate = waitForAnimate(char)
+	if not animate then
+		animApplying = false
+		return false
+	end
+
+	stopAllTracks(hum)
+
+	local runObj   = ensureAnim(animate:FindFirstChild("run"), "RunAnim")
+	local walkObj  = ensureAnim(animate:FindFirstChild("walk"), "WalkAnim")
+	local jumpObj  = ensureAnim(animate:FindFirstChild("jump"), "JumpAnim")
+	local fallObj  = ensureAnim(animate:FindFirstChild("fall"), "FallAnim")
+	local climbObj = ensureAnim(animate:FindFirstChild("climb"), "ClimbAnim")
+	local swimObj  = ensureAnim(animate:FindFirstChild("swim"), "Swim")
+	local swimIdleObj = ensureAnim(animate:FindFirstChild("swimidle"), "SwimIdle")
+	local idleFolder = animate:FindFirstChild("idle")
+
+	setAnim(walkObj,  pick(pack, "WalkAnim", "Walk"))
+	setAnim(runObj,   pick(pack, "RunAnim", "Run"))
+	setAnim(jumpObj,  pick(pack, "JumpAnim", "Jump"))
+	setAnim(fallObj,  pick(pack, "FallAnim", "Fall"))
+	setAnim(climbObj, pick(pack, "ClimbAnim", "Climb"))
+	setAnim(swimObj, pick(pack, "Swim"))
+	setAnim(swimIdleObj, pick(pack, "SwimIdle") or pick(pack, "Swim"))
+
+	if idleFolder then
+		local a1 = pick(pack, "Animation1")
+		local a2 = pick(pack, "Animation2")
+
+		if a1 or a2 then
+			ensureIdleSlots(idleFolder, 2)
+			local id1 = a1 or a2
+			local id2 = a2 or a1 or id1
+			setAnim(idleFolder:FindFirstChild("Animation1"), id1)
+			setAnim(idleFolder:FindFirstChild("Animation2"), id2)
+		elseif pack.Idle and #pack.Idle > 0 then
+			ensureIdleSlots(idleFolder, math.max(2, #pack.Idle))
+			setAnim(idleFolder:FindFirstChild("Animation1"), pack.Idle[1])
+			setAnim(idleFolder:FindFirstChild("Animation2"), pack.Idle[2] or pack.Idle[1])
+			for i = 3, #pack.Idle do
+				local a = idleFolder:FindFirstChild("Animation" .. i)
+				if a then
+					setAnim(a, pack.Idle[i])
+				end
 			end
+		end
+	end
+
+	animate.Disabled = true
+	task.wait(0.06)
+	animate.Disabled = false
+
+	if hum then
+		pcall(function()
+			hum:ChangeState(Enum.HumanoidStateType.Landed)
+			task.wait(0.03)
+			hum:ChangeState(Enum.HumanoidStateType.Running)
 		end)
 	end
 
-	local function updateDrag(input)
+	selectedPackName = packName
+	pcall(function()
+		player:SetAttribute(ATTR_LAST, packName)
+	end)
+
+	animApplying = false
+	return true
+end
+
+local function reapplySelectedPack()
+	if selectedPackName and PACKS[selectedPackName] then
+		task.delay(0.35, function()
+			applyPack(selectedPackName)
+		end)
+	end
+end
+
+--==================================================
+-- TARGET RESOLVE
+--==================================================
+local function resolveTarget(query)
+	query = trim(query or "")
+	if query == "" then
+		return nil, "Please enter username atau userid."
+	end
+
+	local userId
+	if isAllDigits(query) then
+		userId = tonumber(query)
+		if not userId or userId <= 0 then
+			return nil, "Invalid UserId."
+		end
+	else
+		local ok, uid = pcall(function()
+			return Players:GetUserIdFromNameAsync(query)
+		end)
+		if not ok or not uid then
+			return nil, "Username not found / lookup failed."
+		end
+		userId = uid
+	end
+
+	local name = "Unknown"
+	do
+		local ok, nm = pcall(function()
+			return Players:GetNameFromUserIdAsync(userId)
+		end)
+		if ok and nm then
+			name = nm
+		end
+	end
+
+	local thumbnail = ""
+	do
+		local ok, th = pcall(function()
+			return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		end)
+		if ok and th then
+			thumbnail = th
+		end
+	end
+
+	return {UserId = userId, Name = name, Thumbnail = thumbnail}, nil
+end
+
+--==================================================
+-- MORPH APPLY
+--==================================================
+local originalDesc = nil
+do
+	local ok, myDesc = pcall(function()
+		return Players:GetHumanoidDescriptionFromUserId(player.UserId)
+	end)
+	if ok then
+		originalDesc = myDesc
+	end
+end
+
+local function applyDescriptionToHumanoid(humanoid, desc)
+	local ok = false
+	if humanoid.ApplyDescription then
+		ok = pcall(function()
+			humanoid:ApplyDescription(desc)
+		end)
+	end
+	if not ok and humanoid.ApplyDescriptionClientServer then
+		ok = pcall(function()
+			humanoid:ApplyDescriptionClientServer(desc)
+		end)
+	end
+	return ok
+end
+
+local function clearOldAppearance(character)
+	for _, obj in ipairs(character:GetChildren()) do
+		if obj:IsA("Accessory") then
+			obj:Destroy()
+		end
+	end
+
+	for _, obj in ipairs(character:GetChildren()) do
+		if obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") then
+			obj:Destroy()
+		end
+	end
+
+	local bc = character:FindFirstChildOfClass("BodyColors")
+	if bc then
+		bc:Destroy()
+	end
+end
+
+local function morphToUserId(userId, targetName, targetThumb)
+	if not userId then return false, "No target." end
+	if userId == player.UserId then return false, "Cannot morph to yourself." end
+
+	local character, humanoid = waitForCharacterReady()
+	if not humanoid then
+		return false, "Failed to find humanoid."
+	end
+
+	local okDesc, desc = pcall(function()
+		return Players:GetHumanoidDescriptionFromUserId(userId)
+	end)
+	if not okDesc or not desc then
+		return false, "Failed to load avatar data."
+	end
+
+	stopAllTracks(humanoid)
+	clearOldAppearance(character)
+
+	task.wait(0.08)
+
+	local okApply = applyDescriptionToHumanoid(humanoid, desc)
+	if not okApply then
+		if originalDesc then
+			pcall(function()
+				applyDescriptionToHumanoid(humanoid, originalDesc)
+			end)
+		end
+		return false, "Failed to apply avatar."
+	end
+
+	task.wait(0.2)
+
+	reapplySelectedPack()
+
+	sendNotif("Avatar Changer", "Successfully copied " .. (targetName or "target") .. "!", targetThumb or "")
+	return true, nil
+end
+
+--==================================================
+-- CLEANUP OLD GUI
+--==================================================
+local guiName = "MorphAvatarAnimMerged"
+do
+	local existing = CoreGui:FindFirstChild(guiName)
+	if existing then existing:Destroy() end
+	local pg = player:FindFirstChild("PlayerGui")
+	if pg then
+		local ex2 = pg:FindFirstChild(guiName)
+		if ex2 then ex2:Destroy() end
+	end
+end
+
+--==================================================
+-- CREATE GUI
+--==================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = guiName
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 999999
+screenGui.IgnoreGuiInset = true
+screenGui.Enabled = true
+
+local parentOk = pcall(function()
+	screenGui.Parent = CoreGui
+end)
+if not parentOk then
+	local pg = player:WaitForChild("PlayerGui")
+	screenGui.Parent = pg
+end
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 390, 0, 440)
+frame.Position = UDim2.new(0.5, -195, 0.5, -190)
+frame.BackgroundColor3 = BLACK
+frame.BackgroundTransparency = 1 - MENU_ALPHA
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+frame.Visible = true
+frame.ClipsDescendants = true
+frame.Active = true
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = frame
+
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(80, 80, 80)
+stroke.Transparency = 0.3
+stroke.Parent = frame
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundTransparency = 1
+titleBar.Parent = frame
+titleBar.Active = true
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -170, 0, 32)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.Text = "Avatar + Animation Changer"
+title.TextColor3 = WHITE
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
+
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(0, 160, 0, 32)
+hint.Position = UDim2.new(1, -225, 0, 0)
+hint.Text = "( comma = hide )"
+hint.TextColor3 = Color3.fromRGB(170, 170, 170)
+hint.BackgroundTransparency = 1
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 12
+hint.TextXAlignment = Enum.TextXAlignment.Right
+hint.Parent = titleBar
+
+local miniBtn = Instance.new("TextButton")
+miniBtn.Size = UDim2.new(0, 32, 0, 32)
+miniBtn.Position = UDim2.new(1, -70, 0, 0)
+miniBtn.Text = "-"
+miniBtn.Font = Enum.Font.GothamBold
+miniBtn.TextSize = 16
+miniBtn.TextColor3 = WHITE
+miniBtn.BackgroundTransparency = 1
+miniBtn.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 32, 0, 32)
+closeBtn.Position = UDim2.new(1, -35, 0, 0)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 16
+closeBtn.TextColor3 = RED
+closeBtn.BackgroundTransparency = 1
+closeBtn.Parent = titleBar
+
+local usernameInput = Instance.new("TextBox")
+usernameInput.Size = UDim2.new(1, -130, 0, 30)
+usernameInput.Position = UDim2.new(0, 10, 0, 45)
+usernameInput.PlaceholderText = "Username or UserId"
+usernameInput.Font = Enum.Font.GothamBold
+usernameInput.TextSize = 14
+usernameInput.Text = ""
+usernameInput.TextColor3 = WHITE
+usernameInput.BackgroundColor3 = DARK_GRAY
+usernameInput.ClearTextOnFocus = false
+usernameInput.TextWrapped = false
+usernameInput.Parent = frame
+Instance.new("UICorner", usernameInput).CornerRadius = UDim.new(0, 6)
+
+local searchBtn = Instance.new("TextButton")
+searchBtn.Size = UDim2.new(0, 100, 0, 30)
+searchBtn.Position = UDim2.new(1, -110, 0, 45)
+searchBtn.Text = "Search"
+searchBtn.Font = Enum.Font.GothamBold
+searchBtn.TextSize = 14
+searchBtn.TextColor3 = WHITE
+searchBtn.BackgroundColor3 = MID_GRAY
+searchBtn.Parent = frame
+searchBtn:SetAttribute("BaseColor", searchBtn.BackgroundColor3)
+Instance.new("UICorner", searchBtn).CornerRadius = UDim.new(0, 6)
+
+local previewBox = Instance.new("Frame")
+previewBox.Size = UDim2.new(1, -20, 0, 78)
+previewBox.Position = UDim2.new(0, 10, 0, 83)
+previewBox.BackgroundColor3 = DARK_GRAY
+previewBox.BorderSizePixel = 0
+previewBox.Parent = frame
+Instance.new("UICorner", previewBox).CornerRadius = UDim.new(0, 8)
+
+local avatarImg = Instance.new("ImageLabel")
+avatarImg.Size = UDim2.new(0, 64, 0, 64)
+avatarImg.Position = UDim2.new(0, 8, 0, 7)
+avatarImg.BackgroundTransparency = 1
+avatarImg.Image = ""
+avatarImg.Parent = previewBox
+Instance.new("UICorner", avatarImg).CornerRadius = UDim.new(0, 10)
+
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(1, -84, 0, 22)
+nameLabel.Position = UDim2.new(0, 80, 0, 10)
+nameLabel.BackgroundTransparency = 1
+nameLabel.TextColor3 = WHITE
+nameLabel.Font = Enum.Font.GothamBold
+nameLabel.TextSize = 14
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Text = "Name: -"
+nameLabel.Parent = previewBox
+
+local idLabel = Instance.new("TextLabel")
+idLabel.Size = UDim2.new(1, -84, 0, 18)
+idLabel.Position = UDim2.new(0, 80, 0, 34)
+idLabel.BackgroundTransparency = 1
+idLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+idLabel.Font = Enum.Font.GothamBold
+idLabel.TextSize = 12
+idLabel.TextXAlignment = Enum.TextXAlignment.Left
+idLabel.Text = "UserId: -"
+idLabel.Parent = previewBox
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -84, 0, 18)
+statusLabel.Position = UDim2.new(0, 80, 0, 54)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 12
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Text = "Status: idle"
+statusLabel.Parent = previewBox
+
+local packLabel = Instance.new("TextLabel")
+packLabel.Size = UDim2.new(1, -20, 0, 20)
+packLabel.Position = UDim2.new(0, 10, 0, 170)
+packLabel.BackgroundTransparency = 1
+packLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+packLabel.Font = Enum.Font.GothamBold
+packLabel.TextSize = 13
+packLabel.TextXAlignment = Enum.TextXAlignment.Left
+packLabel.Text = "Selected Pack: (none)"
+packLabel.Parent = frame
+
+local packSearch = Instance.new("TextBox")
+packSearch.Size = UDim2.new(1, -20, 0, 30)
+packSearch.Position = UDim2.new(0, 10, 0, 195)
+packSearch.PlaceholderText = "Search animation pack..."
+packSearch.Font = Enum.Font.Gotham
+packSearch.TextSize = 14
+packSearch.Text = ""
+packSearch.TextColor3 = WHITE
+packSearch.BackgroundColor3 = DARK_GRAY
+packSearch.ClearTextOnFocus = false
+packSearch.Parent = frame
+Instance.new("UICorner", packSearch).CornerRadius = UDim.new(0, 6)
+
+local listFrame = Instance.new("Frame")
+listFrame.Size = UDim2.new(1, -20, 0, 160)
+listFrame.Position = UDim2.new(0, 10, 0, 232)
+listFrame.BackgroundColor3 = DARK_GRAY
+listFrame.BorderSizePixel = 0
+listFrame.Parent = frame
+Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 8)
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -10, 1, -10)
+scroll.Position = UDim2.new(0, 5, 0, 5)
+scroll.BackgroundTransparency = 1
+scroll.BorderSizePixel = 0
+scroll.ScrollBarThickness = 6
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.Parent = listFrame
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = scroll
+
+local buttonsByPack = {}
+
+local function refreshCanvas()
+	task.wait()
+	scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+end
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshCanvas)
+
+local function updatePackLabel()
+	packLabel.Text = "Selected Pack: " .. (selectedPackName or "(none)")
+end
+
+local function filterPackButtons(text)
+	text = (text or ""):lower()
+	for name, btn in pairs(buttonsByPack) do
+		btn.Visible = (text == "") or (name:lower():find(text, 1, true) ~= nil)
+	end
+	refreshCanvas()
+end
+
+for i, packName in ipairs(orderedPackNames) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0, 30)
+	btn.BackgroundColor3 = MID_GRAY
+	btn.TextColor3 = WHITE
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 13
+	btn.Text = packName
+	btn.Parent = scroll
+	btn.LayoutOrder = i
+	btn:SetAttribute("BaseColor", btn.BackgroundColor3)
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+	btn.MouseEnter:Connect(function() hoverTween(btn, true) end)
+	btn.MouseLeave:Connect(function() hoverTween(btn, false) end)
+
+	btn.MouseButton1Click:Connect(function()
+		local ok = applyPack(packName)
+		if ok then
+			updatePackLabel()
+			sendNotif("Animation Pack", "Applied: " .. packName, "")
+		else
+			sendNotif("Animation Pack", "Failed to apply: " .. packName, "")
+		end
+	end)
+
+	buttonsByPack[packName] = btn
+end
+
+local updateBtn = Instance.new("TextButton")
+updateBtn.Size = UDim2.new(1, -20, 0, 30)
+updateBtn.Position = UDim2.new(0, 10, 1, -35)
+updateBtn.Text = "Copy Avatar"
+updateBtn.Font = Enum.Font.GothamBold
+updateBtn.TextSize = 14
+updateBtn.TextColor3 = WHITE
+updateBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
+updateBtn.Parent = frame
+updateBtn:SetAttribute("BaseColor", updateBtn.BackgroundColor3)
+Instance.new("UICorner", updateBtn).CornerRadius = UDim.new(0, 8)
+
+setButtonEnabled(updateBtn, false)
+filterPackButtons("")
+updatePackLabel()
+
+--==================================================
+-- DRAGGING
+--==================================================
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingTitleBar = true
+		dragStart = input.Position
+		startPos = frame.Position
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingTitleBar = false
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if draggingTitleBar and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - dragStart
-		targetFrame.Position = UDim2.new(
+		frame.Position = UDim2.new(
 			startPos.X.Scale, startPos.X.Offset + delta.X,
 			startPos.Y.Scale, startPos.Y.Offset + delta.Y
 		)
 	end
-
-	dragHandle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			beginDrag(input)
-		end
-	end)
-
-	dragHandle.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input == dragInput then
-			updateDrag(input)
-		end
-	end)
-end
-
-local function safeNumber(str, fallback)
-	str = tostring(str or ""):gsub(",", ".")
-	local n = tonumber(str)
-	return n or fallback
-end
-
---==================== Character helpers =============
-local function getChar()
-	return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-end
-
-local function getHRP(char)
-	return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHumanoid(char)
-	return char and char:FindFirstChildOfClass("Humanoid")
-end
-
---==================== Local-only overlay folder =====
-local function getOverlayFolder()
-	local cam = workspace.CurrentCamera
-	if not cam then return nil end
-
-	local folder = cam:FindFirstChild(OVERLAY_FOLDER_NAME)
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = OVERLAY_FOLDER_NAME
-		folder.Parent = cam
-	end
-	return folder
-end
-
---==================== Overlay state =================
-local Overlay = {
-	model = nil,
-	hrp = nil,
-	weld = nil,
-	renderConn = nil,
-	motorPairs = {},
-
-	hideSelf = true,
-	hiddenParts = {},
-	hideConn = nil,
-	hideEnforceConn = nil,
-
-	lastUserId = nil,
-	lastUsername = nil,
-	offset = DEFAULT_OFFSET,
-}
-
---==================== Visual Name state =============
-local VisualName = {
-	enabled = false,
-	mode = "OFF", -- "CUSTOM" | "HIDEONLY" | "OFF"
-	displayName = "",
-	userName = "",
-
-	-- style settings
-	yOffset = 2.6,
-	fontMode = "BOLD", -- BOLD / BLACK
-	outline = 0.35,    -- 0..1 (lebih kecil = outline lebih tebal)
-
-	tagGui = nil,
-
-	-- default overhead suppression (Humanoid)
-	orig = {},
-	propConns = {},
-	overheadEnforceConn = nil,
-
-	-- custom tags suppression
-	suppressed = {}, -- [Gui] = prevEnabled
-	addConns = {},
-	suppressEnforceConn = nil,
-}
-
---====================================================
--- HIDE SELF (anti camera override)
---====================================================
-local function stopHideHooks()
-	if Overlay.hideConn then Overlay.hideConn:Disconnect() Overlay.hideConn = nil end
-	if Overlay.hideEnforceConn then Overlay.hideEnforceConn:Disconnect() Overlay.hideEnforceConn = nil end
-end
-
-local function enforceHideOnce()
-	if not Overlay.hideSelf then return end
-	for inst, _prev in pairs(Overlay.hiddenParts) do
-		if inst and inst.Parent then
-			if inst:IsA("BasePart") then
-				if inst.LocalTransparencyModifier ~= 1 then inst.LocalTransparencyModifier = 1 end
-			elseif inst:IsA("Decal") or inst:IsA("Texture") then
-				if inst.Transparency ~= 1 then inst.Transparency = 1 end
-			end
-		end
-	end
-end
-
-local function setLocalHideSelf(enabled)
-	Overlay.hideSelf = enabled
-	local char = LocalPlayer.Character
-	if not char then return end
-
-	stopHideHooks()
-
-	-- restore
-	for inst, prev in pairs(Overlay.hiddenParts) do
-		if inst and inst.Parent then
-			if inst:IsA("BasePart") then
-				inst.LocalTransparencyModifier = prev
-			elseif inst:IsA("Decal") or inst:IsA("Texture") then
-				inst.Transparency = prev
-			end
-		end
-	end
-	table.clear(Overlay.hiddenParts)
-
-	if not enabled then return end
-
-	for _, inst in ipairs(char:GetDescendants()) do
-		if inst:IsA("BasePart") then
-			Overlay.hiddenParts[inst] = inst.LocalTransparencyModifier
-			inst.LocalTransparencyModifier = 1
-		elseif inst:IsA("Decal") or inst:IsA("Texture") then
-			Overlay.hiddenParts[inst] = inst.Transparency
-			inst.Transparency = 1
-		end
-	end
-
-	local head = char:FindFirstChild("Head")
-	if head then
-		for _, d in ipairs(head:GetDescendants()) do
-			if d:IsA("Decal") or d:IsA("Texture") then
-				if Overlay.hiddenParts[d] == nil then
-					Overlay.hiddenParts[d] = d.Transparency
-				end
-				d.Transparency = 1
-			end
-		end
-	end
-
-	Overlay.hideConn = char.DescendantAdded:Connect(function(inst)
-		if not Overlay.hideSelf then return end
-		if inst:IsA("BasePart") then
-			if Overlay.hiddenParts[inst] == nil then
-				Overlay.hiddenParts[inst] = inst.LocalTransparencyModifier
-			end
-			inst.LocalTransparencyModifier = 1
-		elseif inst:IsA("Decal") or inst:IsA("Texture") then
-			if Overlay.hiddenParts[inst] == nil then
-				Overlay.hiddenParts[inst] = inst.Transparency
-			end
-			inst.Transparency = 1
-		end
-	end)
-
-	local acc = 0
-	Overlay.hideEnforceConn = RunService.RenderStepped:Connect(function(dt)
-		if not Overlay.hideSelf then return end
-		acc += dt
-		if acc < 0.12 then return end
-		acc = 0
-		enforceHideOnce()
-	end)
-end
-
---====================================================
--- NAMETAG: suppress default overhead (Humanoid)
---====================================================
-local function stopDefaultOverheadSuppress()
-	if VisualName.overheadEnforceConn then
-		VisualName.overheadEnforceConn:Disconnect()
-		VisualName.overheadEnforceConn = nil
-	end
-	for _, c in ipairs(VisualName.propConns) do
-		if c then c:Disconnect() end
-	end
-	table.clear(VisualName.propConns)
-end
-
-local function startDefaultOverheadSuppress()
-	stopDefaultOverheadSuppress()
-
-	local char = LocalPlayer.Character
-	local hum = getHumanoid(char)
-	if not hum then return end
-
-	if VisualName.orig.hum ~= hum then
-		VisualName.orig = {
-			hum = hum,
-			DisplayDistanceType = hum.DisplayDistanceType,
-			NameDisplayDistance = hum.NameDisplayDistance,
-			HealthDisplayType = hum.HealthDisplayType,
-			HealthDisplayDistance = hum.HealthDisplayDistance,
-		}
-	end
-
-	local function apply()
-		if not VisualName.enabled then return end
-		pcall(function()
-			hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-			hum.NameDisplayDistance = 0
-			hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
-			hum.HealthDisplayDistance = 0
-		end)
-	end
-
-	apply()
-
-	table.insert(VisualName.propConns, hum:GetPropertyChangedSignal("DisplayDistanceType"):Connect(apply))
-	table.insert(VisualName.propConns, hum:GetPropertyChangedSignal("NameDisplayDistance"):Connect(apply))
-	table.insert(VisualName.propConns, hum:GetPropertyChangedSignal("HealthDisplayType"):Connect(apply))
-	table.insert(VisualName.propConns, hum:GetPropertyChangedSignal("HealthDisplayDistance"):Connect(apply))
-
-	local acc = 0
-	VisualName.overheadEnforceConn = RunService.RenderStepped:Connect(function(dt)
-		if not VisualName.enabled then return end
-		acc += dt
-		if acc < 0.2 then return end
-		acc = 0
-		apply()
-	end)
-end
-
-local function restoreDefaultOverhead()
-	stopDefaultOverheadSuppress()
-	local o = VisualName.orig
-	local hum = o and o.hum
-	if hum and hum.Parent then
-		pcall(function()
-			hum.DisplayDistanceType = o.DisplayDistanceType
-			hum.NameDisplayDistance = o.NameDisplayDistance
-			hum.HealthDisplayType = o.HealthDisplayType
-			hum.HealthDisplayDistance = o.HealthDisplayDistance
-		end)
-	end
-end
-
---====================================================
--- NAMETAG: suppress custom game tags (BillboardGui/SurfaceGui)
---====================================================
-local function stopCustomTagSuppress()
-	if VisualName.suppressEnforceConn then
-		VisualName.suppressEnforceConn:Disconnect()
-		VisualName.suppressEnforceConn = nil
-	end
-	for _, c in ipairs(VisualName.addConns) do
-		if c then c:Disconnect() end
-	end
-	table.clear(VisualName.addConns)
-end
-
-local function isOurTag(gui)
-	return (gui == VisualName.tagGui) or (gui.Name == "LocalReplacedNameTag")
-end
-
-local function isAttachedToLocalCharacter(gui)
-	local char = LocalPlayer.Character
-	if not char then return false end
-
-	local ad = gui.Adornee
-	if ad and ad:IsDescendantOf(char) then
-		return true
-	end
-	if gui.Parent and gui.Parent:IsDescendantOf(char) then
-		return true
-	end
-	return false
-end
-
-local function trySuppressGui(gui)
-	if not (gui:IsA("BillboardGui") or gui:IsA("SurfaceGui")) then return end
-	if isOurTag(gui) then return end
-	if not isAttachedToLocalCharacter(gui) then return end
-
-	if VisualName.suppressed[gui] == nil then
-		VisualName.suppressed[gui] = gui.Enabled
-	end
-	gui.Enabled = false
-end
-
-local function suppressExistingCharacterTags()
-	local char = LocalPlayer.Character
-	if not char then return end
-
-	-- scan character descendants (fast)
-	for _, inst in ipairs(char:GetDescendants()) do
-		if inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") then
-			trySuppressGui(inst)
-		end
-	end
-
-	-- scan workspace for guis that adore/attach to our character (time-sliced)
-	local all = workspace:GetDescendants()
-	for i = 1, #all do
-		local inst = all[i]
-		if inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") then
-			if isAttachedToLocalCharacter(inst) then
-				trySuppressGui(inst)
-			end
-		end
-		if (i % 2500) == 0 then task.wait() end
-	end
-end
-
-local function startCustomTagSuppress()
-	stopCustomTagSuppress()
-	suppressExistingCharacterTags()
-
-	local char = LocalPlayer.Character
-	if char then
-		table.insert(VisualName.addConns, char.DescendantAdded:Connect(function(inst)
-			if not VisualName.enabled then return end
-			if inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") then
-				task.defer(function()
-					if VisualName.enabled then
-						trySuppressGui(inst)
-					end
-				end)
-			end
-		end))
-	end
-
-	table.insert(VisualName.addConns, workspace.DescendantAdded:Connect(function(inst)
-		if not VisualName.enabled then return end
-		if inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") then
-			task.defer(function()
-				if VisualName.enabled and isAttachedToLocalCharacter(inst) then
-					trySuppressGui(inst)
-				end
-			end)
-		end
-	end))
-
-	local acc = 0
-	VisualName.suppressEnforceConn = RunService.RenderStepped:Connect(function(dt)
-		if not VisualName.enabled then return end
-		acc += dt
-		if acc < 0.2 then return end
-		acc = 0
-
-		for gui, _prev in pairs(VisualName.suppressed) do
-			if gui and gui.Parent and gui.Enabled ~= false then
-				gui.Enabled = false
-			end
-		end
-	end)
-end
-
-local function restoreCustomTags()
-	stopCustomTagSuppress()
-	for gui, prevEnabled in pairs(VisualName.suppressed) do
-		if gui and gui.Parent then
-			gui.Enabled = prevEnabled
-		end
-	end
-	table.clear(VisualName.suppressed)
-end
-
---====================================================
--- NAMETAG: build our custom tag (adjustable)
---====================================================
-local function removeOurNametag()
-	if VisualName.tagGui then
-		pcall(function() VisualName.tagGui:Destroy() end)
-	end
-	VisualName.tagGui = nil
-end
-
-local function buildOurNametag(displayName, userName)
-	removeOurNametag()
-
-	local char = LocalPlayer.Character
-	if not char then return end
-	local head = char:FindFirstChild("Head")
-	if not head then return end
-
-	local bill = Instance.new("BillboardGui")
-	bill.Name = "LocalReplacedNameTag"
-	bill.Adornee = head
-	bill.Size = UDim2.new(0, 230, 0, 56)
-	bill.StudsOffset = Vector3.new(0, VisualName.yOffset, 0)
-	bill.AlwaysOnTop = true
-	bill.LightInfluence = 0
-	bill.Parent = head
-
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.new(1,0,1,0)
-	t.BackgroundTransparency = 1
-	t.TextScaled = true
-	t.TextColor3 = Color3.new(1,1,1)
-	t.TextStrokeColor3 = Color3.new(0,0,0)
-	t.TextStrokeTransparency = math.clamp(VisualName.outline, 0, 1)
-	t.Font = (VisualName.fontMode == "BLACK") and Enum.Font.GothamBlack or Enum.Font.GothamBold
-	t.Parent = bill
-
-	local lines = {}
-
-	if displayName and displayName ~= "" then
-		table.insert(lines, displayName)
-	end
-
-	if userName and userName ~= "" then
-		table.insert(lines, "@" .. userName)
-	end
-
-	-- kalau dua-duanya kosong, biar tidak bikin text aneh
-	t.Text = (#lines > 0) and table.concat(lines, "\n") or ""
-
-
-	VisualName.tagGui = bill
-end
-
--- IMPORTANT: sequence is fixed so custom tag won't get suppressed
-local function enableNametagReplace(displayName, userName)
-	VisualName.enabled = true
-	VisualName.mode = "CUSTOM"
-	VisualName.displayName = displayName
-	VisualName.userName = userName
-
-	startDefaultOverheadSuppress()
-
-	-- 1) build our tag FIRST
-	buildOurNametag(displayName, userName)
-
-	-- 2) then suppress all other tags (won't touch ours)
-	startCustomTagSuppress()
-end
-
-local function enableHideOnly()
-	VisualName.enabled = true
-	VisualName.mode = "HIDEONLY"
-	VisualName.displayName = ""
-	VisualName.userName = ""
-
-	removeOurNametag()
-	startDefaultOverheadSuppress()
-	startCustomTagSuppress()
-end
-
-local function disableNametag()
-	VisualName.enabled = false
-	VisualName.mode = "OFF"
-	VisualName.displayName = ""
-	VisualName.userName = ""
-
-	removeOurNametag()
-	restoreDefaultOverhead()
-	restoreCustomTags()
-end
-
---====================================================
--- OVERLAY CORE (pose mirror)
---====================================================
-local function clearMotorPairs()
-	table.clear(Overlay.motorPairs)
-end
-
-local function stopRender()
-	if Overlay.renderConn then
-		Overlay.renderConn:Disconnect()
-		Overlay.renderConn = nil
-	end
-end
-
-local function destroyOverlay()
-	stopRender()
-	clearMotorPairs()
-	if Overlay.model then pcall(function() Overlay.model:Destroy() end) end
-	Overlay.model, Overlay.hrp, Overlay.weld = nil, nil, nil
-end
-
-local function motorKey(m)
-	local p0 = (m.Part0 and m.Part0.Name) or "nil"
-	local p1 = (m.Part1 and m.Part1.Name) or "nil"
-	return m.Name .. "|" .. p0 .. ">" .. p1
-end
-
-local function buildMotorPairs(sourceChar, targetModel)
-	clearMotorPairs()
-
-	local srcMap = {}
-	for _, d in ipairs(sourceChar:GetDescendants()) do
-		if d:IsA("Motor6D") then
-			srcMap[motorKey(d)] = d
-		end
-	end
-
-	local tgtMap = {}
-	for _, d in ipairs(targetModel:GetDescendants()) do
-		if d:IsA("Motor6D") then
-			tgtMap[motorKey(d)] = d
-		end
-	end
-
-	for k, src in pairs(srcMap) do
-		local tgt = tgtMap[k]
-		if tgt then
-			table.insert(Overlay.motorPairs, { src = src, tgt = tgt })
-		end
-	end
-end
-
-local function makeModelNonInteractive(model)
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("Script") or d:IsA("LocalScript") then d.Disabled = true end
-	end
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.CanCollide = false
-			d.CanTouch = false
-			d.CanQuery = false
-			d.Massless = true
-		end
-	end
-
-	local hum = model:FindFirstChildOfClass("Humanoid")
-	if hum then
-		hum.PlatformStand = true
-		hum.AutoRotate = false
-	end
-end
-
-local function createModelFromUserId(userId)
-	local ok, modelOrErr = pcall(function()
-		local fn = Players.CreateHumanoidModelFromUserIdAsync
-		if typeof(fn) == "function" then
-			return Players:CreateHumanoidModelFromUserIdAsync(userId)
-		end
-		return Players:CreateHumanoidModelFromUserId(userId)
-	end)
-	return ok, modelOrErr
-end
-
-local function resolveTarget(text)
-	text = tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
-	if text == "" then return false, "Input empty." end
-
-	local asNumber = tonumber(text)
-	if asNumber then
-		local uid = math.floor(asNumber)
-		if uid <= 0 then return false, "Invalid UserId." end
-		local okName, uname = pcall(function()
-			return Players:GetNameFromUserIdAsync(uid)
-		end)
-		if not okName or not uname then return false, "UserId not found." end
-		return true, uid, uname
-	end
-
-	local okId, uid = pcall(function()
-		return Players:GetUserIdFromNameAsync(text)
-	end)
-	if not okId or not uid or uid == 0 then return false, "Username not found." end
-
-	return true, uid, text
-end
-
-local function startPoseMirrorLoop()
-	stopRender()
-	Overlay.renderConn = RunService.RenderStepped:Connect(function()
-		if not Overlay.model or not Overlay.hrp then return end
-		local folder = getOverlayFolder()
-		if folder and Overlay.model.Parent ~= folder then
-			Overlay.model.Parent = folder
-		end
-		for _, pair in ipairs(Overlay.motorPairs) do
-			local src, tgt = pair.src, pair.tgt
-			if src and tgt and src.Parent and tgt.Parent then
-				tgt.Transform = src.Transform
-			end
-		end
-	end)
-end
-
-local function spawnOverlay(userId, username, statusFn)
-	statusFn("Spawning overlay...")
-	destroyOverlay()
-
-	local okModel, modelOrErr = createModelFromUserId(userId)
-	if not okModel or typeof(modelOrErr) ~= "Instance" then
-		statusFn("Failed to create avatar model.")
-		return false
-	end
-
-	local model = modelOrErr
-	model.Name = ("Overlay_%d"):format(userId)
-
-	local folder = getOverlayFolder()
-	if not folder then
-		model:Destroy()
-		statusFn("Camera not ready.")
-		return false
-	end
-	model.Parent = folder
-
-	makeModelNonInteractive(model)
-
-	local ohrp = model:FindFirstChild("HumanoidRootPart")
-	if not ohrp or not ohrp:IsA("BasePart") then
-		model:Destroy()
-		statusFn("Overlay HRP missing.")
-		return false
-	end
-
-	local myChar = getChar()
-	local myHRP = getHRP(myChar)
-	if not myHRP then
-		model:Destroy()
-		statusFn("Your HRP not ready.")
-		return false
-	end
-
-	model:PivotTo(myHRP.CFrame * Overlay.offset)
-
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = ohrp
-	weld.Part1 = myHRP
-	weld.Parent = ohrp
-
-	Overlay.model, Overlay.hrp, Overlay.weld = model, ohrp, weld
-	Overlay.lastUserId, Overlay.lastUsername = userId, username
-
-	buildMotorPairs(myChar, model)
-	startPoseMirrorLoop()
-
-	statusFn(("Overlay ON: %s (%d)"):format(username, userId))
-	return true
-end
-
--- Respawn-safe
-LocalPlayer.CharacterAdded:Connect(function()
-	task.wait(0.25)
-
-	if Overlay.hideSelf then
-		setLocalHideSelf(true)
-	end
-
-	if VisualName.enabled then
-		if VisualName.mode == "CUSTOM" then
-			enableNametagReplace(
-				VisualName.displayName ~= "" and VisualName.displayName or LocalPlayer.DisplayName,
-				VisualName.userName ~= "" and VisualName.userName or LocalPlayer.Name
-			)
-		elseif VisualName.mode == "HIDEONLY" then
-			enableHideOnly()
-		end
-	end
-
-	if Overlay.lastUserId then
-		spawnOverlay(Overlay.lastUserId, Overlay.lastUsername or tostring(Overlay.lastUserId), function() end)
+end)
+
+--==================================================
+-- MINIMIZE / CLOSE / TOGGLE
+--==================================================
+miniBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	if minimized then
+		frame.Size = UDim2.new(0, 390, 0, 32)
+		miniBtn.Text = "+"
+		usernameInput.Visible = false
+		searchBtn.Visible = false
+		previewBox.Visible = false
+		packLabel.Visible = false
+		packSearch.Visible = false
+		listFrame.Visible = false
+		updateBtn.Visible = false
+	else
+		frame.Size = UDim2.new(0, 390, 0, 440)
+		miniBtn.Text = "-"
+		usernameInput.Visible = true
+		searchBtn.Visible = true
+		previewBox.Visible = true
+		packLabel.Visible = true
+		packSearch.Visible = true
+		listFrame.Visible = true
+		updateBtn.Visible = true
 	end
 end)
 
---====================================================
--- UI BUILD
---====================================================
-local pg = LocalPlayer:WaitForChild("PlayerGui")
-local old = pg:FindFirstChild("LocalOverlayAvatarGui")
-if old then old:Destroy() end
+closeBtn.MouseButton1Click:Connect(function()
+	screenGui:Destroy()
+end)
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "LocalOverlayAvatarGui"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-gui.DisplayOrder = 999999
-gui.Parent = pg
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.Comma then
+		screenGui.Enabled = not screenGui.Enabled
+	end
+end)
 
-local uiHidden = false
-local minimized = false
-local normalSize
-
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 420, 0, 430)
-frame.AnchorPoint = Vector2.new(0.5, 0.5)
-frame.Position = UDim2.fromScale(0.5, 0.5)
-frame.BackgroundColor3 = Color3.fromRGB(25,25,30)
-frame.BorderSizePixel = 0
-frame.Active = true
-setCorner(frame, 14)
-normalSize = frame.Size
-
-local header = Instance.new("Frame", frame)
-header.Size = UDim2.new(1,0,0,44)
-header.BackgroundColor3 = Color3.fromRGB(40,40,55)
-header.BorderSizePixel = 0
-header.Active = true
-
-local title = Instance.new("TextLabel", header)
-title.Size = UDim2.new(1,-170,1,0)
-title.Position = UDim2.new(0,12,0,0)
-title.BackgroundTransparency = 1
-title.Text = "AVATAR CREATOR COPIER by KIXDEV"
-title.Font = FONT_UI
-title.TextSize = 16
-title.TextColor3 = Color3.new(1,1,1)
-title.TextXAlignment = Enum.TextXAlignment.Left
-
-local idBtn = Instance.new("TextButton", header)
-idBtn.Size = UDim2.new(0,36,0,36)
-idBtn.Position = UDim2.new(1,-124,0,4)
-idBtn.Text = "ID"
-idBtn.Font = FONT_UI
-idBtn.TextSize = 14
-idBtn.TextColor3 = Color3.new(1,1,1)
-idBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-setCorner(idBtn, 10)
-applyButtonFX(idBtn, Color3.fromRGB(70,70,90), Color3.fromRGB(90,90,115), Color3.fromRGB(55,55,70))
-
-local minimizeBtn = Instance.new("TextButton", header)
-minimizeBtn.Size = UDim2.new(0,36,0,36)
-minimizeBtn.Position = UDim2.new(1,-84,0,4)
-minimizeBtn.Text = "−"
-minimizeBtn.Font = FONT_UI
-minimizeBtn.TextSize = 22
-minimizeBtn.TextColor3 = Color3.new(1,1,1)
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-setCorner(minimizeBtn, 10)
-applyButtonFX(minimizeBtn, Color3.fromRGB(70,70,90), Color3.fromRGB(90,90,115), Color3.fromRGB(55,55,70))
-
-local closeBtn = Instance.new("TextButton", header)
-closeBtn.Size = UDim2.new(0,36,0,36)
-closeBtn.Position = UDim2.new(1,-44,0,4)
-closeBtn.Text = "×"
-closeBtn.Font = FONT_UI
-closeBtn.TextSize = 22
-closeBtn.TextColor3 = Color3.new(1,1,1)
-closeBtn.BackgroundColor3 = Color3.fromRGB(180,60,60)
-setCorner(closeBtn, 10)
-applyButtonFX(closeBtn, Color3.fromRGB(180,60,60), Color3.fromRGB(200,80,80), Color3.fromRGB(150,40,40))
-
-makeDraggable(header, frame)
-
--- content scroll
-local scroll = Instance.new("ScrollingFrame", frame)
-scroll.Position = UDim2.new(0,0,0,44)
-scroll.Size = UDim2.new(1,0,1,-44)
-scroll.BackgroundTransparency = 1
-scroll.BorderSizePixel = 0
-scroll.ScrollBarThickness = 6
-scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.CanvasSize = UDim2.new(0,0,0,0)
-scroll.ClipsDescendants = true
-
-local layout = Instance.new("UIListLayout", scroll)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Padding = UDim.new(0,10)
-
-local pad = Instance.new("UIPadding", scroll)
-pad.PaddingLeft = UDim.new(0,18)
-pad.PaddingRight = UDim.new(0,18)
-pad.PaddingTop = UDim.new(0,14)
-pad.PaddingBottom = UDim.new(0,16)
-
-local status = Instance.new("TextLabel", scroll)
-status.LayoutOrder = 1
-status.Size = UDim2.new(1,0,0,20)
-status.BackgroundTransparency = 1
-status.Text = "Status: Ready"
-status.Font = FONT_UI
-status.TextSize = 12
-status.TextColor3 = Color3.fromRGB(170,170,170)
-status.TextXAlignment = Enum.TextXAlignment.Left
-
-local function setStatus(t)
-	status.Text = "Status: " .. tostring(t)
+for _, b in ipairs({searchBtn, updateBtn}) do
+	b.MouseEnter:Connect(function() hoverTween(b, true) end)
+	b.MouseLeave:Connect(function() hoverTween(b, false) end)
 end
 
-local function makeClippedBox(parent, order, placeholder, defaultText)
-	local holder = Instance.new("Frame", parent)
-	holder.LayoutOrder = order
-	holder.Size = UDim2.new(1,0,0,40)
-	holder.BackgroundColor3 = Color3.fromRGB(45,45,55)
-	holder.BorderSizePixel = 0
-	holder.ClipsDescendants = true
-	setCorner(holder, 10)
-
-	local box = Instance.new("TextBox", holder)
-	box.Size = UDim2.new(1,-20,1,0)
-	box.Position = UDim2.new(0,10,0,0)
-	box.BackgroundTransparency = 1
-	box.PlaceholderText = placeholder
-	box.Text = defaultText or ""
-	box.ClearTextOnFocus = false
-	box.Font = FONT_UI
-	box.TextSize = 15
-	box.TextColor3 = Color3.new(1,1,1)
-	box.TextXAlignment = Enum.TextXAlignment.Left
-	return box
-end
-
-local inputBox = makeClippedBox(scroll, 2, "Username / UserId...", "")
-
-local searchBtn = Instance.new("TextButton", scroll)
-searchBtn.LayoutOrder = 3
-searchBtn.Size = UDim2.new(1,0,0,36)
-searchBtn.Text = "Search Target"
-searchBtn.Font = FONT_UI
-searchBtn.TextSize = 14
-searchBtn.TextColor3 = Color3.new(1,1,1)
-searchBtn.BackgroundColor3 = Color3.fromRGB(60,120,180)
-setCorner(searchBtn, 10)
-applyButtonFX(searchBtn, Color3.fromRGB(60,120,180), Color3.fromRGB(80,140,200), Color3.fromRGB(40,90,140))
-
-local preview = Instance.new("Frame", scroll)
-preview.LayoutOrder = 4
-preview.Size = UDim2.new(1,0,0,140)
-preview.BackgroundColor3 = Color3.fromRGB(35,35,45)
-preview.BorderSizePixel = 0
-setCorner(preview, 12)
-
-local thumb = Instance.new("ImageLabel", preview)
-thumb.Size = UDim2.new(0,96,0,96)
-thumb.Position = UDim2.new(0,14,0,22)
-thumb.BackgroundTransparency = 1
-thumb.Image = ""
-
-local nameLbl = Instance.new("TextLabel", preview)
-nameLbl.Size = UDim2.new(1,-130,0,26)
-nameLbl.Position = UDim2.new(0,120,0,28)
-nameLbl.BackgroundTransparency = 1
-nameLbl.Text = "No target selected"
-nameLbl.Font = FONT_UI
-nameLbl.TextSize = 16
-nameLbl.TextColor3 = Color3.new(1,1,1)
-nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-
-local idLbl = Instance.new("TextLabel", preview)
-idLbl.Size = UDim2.new(1,-130,0,20)
-idLbl.Position = UDim2.new(0,120,0,58)
-idLbl.BackgroundTransparency = 1
-idLbl.Text = "UserId: -"
-idLbl.Font = FONT_UI
-idLbl.TextSize = 12
-idLbl.TextColor3 = Color3.fromRGB(180,180,180)
-idLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-local hintLbl = Instance.new("TextLabel", preview)
-hintLbl.Size = UDim2.new(1,-130,0,20)
-hintLbl.Position = UDim2.new(0,120,0,80)
-hintLbl.BackgroundTransparency = 1
-hintLbl.Text = "Spawn overlay to preview"
-hintLbl.Font = FONT_UI
-hintLbl.TextSize = 12
-hintLbl.TextColor3 = Color3.fromRGB(150,150,150)
-hintLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-local hideBtn = Instance.new("TextButton", scroll)
-hideBtn.LayoutOrder = 5
-hideBtn.Size = UDim2.new(1,0,0,36)
-hideBtn.Text = "Hide My Character: ON"
-hideBtn.Font = FONT_UI
-hideBtn.TextSize = 13
-hideBtn.TextColor3 = Color3.new(1,1,1)
-hideBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-setCorner(hideBtn, 12)
-applyButtonFX(hideBtn, Color3.fromRGB(70,70,90), Color3.fromRGB(90,90,115), Color3.fromRGB(55,55,70))
-
-local spawnBtn = Instance.new("TextButton", scroll)
-spawnBtn.LayoutOrder = 6
-spawnBtn.Size = UDim2.new(1,0,0,40)
-spawnBtn.Text = "Spawn / Update Overlay"
-spawnBtn.Font = FONT_UI
-spawnBtn.TextSize = 14
-spawnBtn.TextColor3 = Color3.new(1,1,1)
-spawnBtn.BackgroundColor3 = Color3.fromRGB(70,140,90)
-setCorner(spawnBtn, 12)
-applyButtonFX(spawnBtn, Color3.fromRGB(70,140,90), Color3.fromRGB(90,160,110), Color3.fromRGB(55,110,75))
-
-local removeBtn = Instance.new("TextButton", scroll)
-removeBtn.LayoutOrder = 7
-removeBtn.Size = UDim2.new(1,0,0,40)
-removeBtn.Text = "Remove Overlay"
-removeBtn.Font = FONT_UI
-removeBtn.TextSize = 14
-removeBtn.TextColor3 = Color3.new(1,1,1)
-removeBtn.BackgroundColor3 = Color3.fromRGB(180,60,60)
-setCorner(removeBtn, 12)
-applyButtonFX(removeBtn, Color3.fromRGB(180,60,60), Color3.fromRGB(200,80,80), Color3.fromRGB(150,40,40))
-
---==================== NAME PANEL =====
-local namePanel = Instance.new("Frame", frame)
-namePanel.Visible = false
-namePanel.Size = UDim2.new(0, 360, 0, 320)
-namePanel.Position = UDim2.new(0.5, -180, 0.5, -160)
-namePanel.BackgroundColor3 = Color3.fromRGB(20,20,24)
-namePanel.BorderSizePixel = 0
-namePanel.ZIndex = 200
-namePanel.Active = true
-namePanel.ClipsDescendants = true -- FIX: no overflow
-setCorner(namePanel, 14)
-
-local nameHeader = Instance.new("Frame", namePanel)
-nameHeader.Size = UDim2.new(1,0,0,44)
-nameHeader.BackgroundColor3 = Color3.fromRGB(40,40,55)
-nameHeader.BorderSizePixel = 0
-nameHeader.ZIndex = 201
-nameHeader.Active = true
-
-local nameTitle = Instance.new("TextLabel", nameHeader)
-nameTitle.Size = UDim2.new(1,-60,1,0)
-nameTitle.Position = UDim2.new(0,12,0,0)
-nameTitle.BackgroundTransparency = 1
-nameTitle.Text = "Nametag Control (Local)"
-nameTitle.Font = FONT_UI
-nameTitle.TextSize = 16
-nameTitle.TextColor3 = Color3.new(1,1,1)
-nameTitle.TextXAlignment = Enum.TextXAlignment.Left
-nameTitle.ZIndex = 202
-
-local nameClose = Instance.new("TextButton", nameHeader)
-nameClose.Size = UDim2.new(0,36,0,36)
-nameClose.Position = UDim2.new(1,-44,0,4)
-nameClose.Text = "×"
-nameClose.Font = FONT_UI
-nameClose.TextSize = 22
-nameClose.TextColor3 = Color3.new(1,1,1)
-nameClose.BackgroundColor3 = Color3.fromRGB(180,60,60)
-nameClose.ZIndex = 202
-setCorner(nameClose, 10)
-applyButtonFX(nameClose, Color3.fromRGB(180,60,60), Color3.fromRGB(200,80,80), Color3.fromRGB(150,40,40))
-
-makeDraggable(nameHeader, namePanel)
-
--- Body as ScrollingFrame (FIX: always inside panel)
-local nameBody = Instance.new("ScrollingFrame", namePanel)
-nameBody.Position = UDim2.new(0,0,0,44)
-nameBody.Size = UDim2.new(1,0,1,-44)
-nameBody.BackgroundTransparency = 1
-nameBody.BorderSizePixel = 0
-nameBody.ScrollBarThickness = 6
-nameBody.AutomaticCanvasSize = Enum.AutomaticSize.Y
-nameBody.CanvasSize = UDim2.new(0,0,0,0)
-nameBody.ZIndex = 201
-
-local nameLayout = Instance.new("UIListLayout", nameBody)
-nameLayout.Padding = UDim.new(0,10)
-nameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local namePad = Instance.new("UIPadding", nameBody)
-namePad.PaddingLeft = UDim.new(0,16)
-namePad.PaddingRight = UDim.new(0,16)
-namePad.PaddingTop = UDim.new(0,14)
-namePad.PaddingBottom = UDim.new(0,14)
-
-local nameHint = Instance.new("TextLabel", nameBody)
-nameHint.LayoutOrder = 1
-nameHint.Size = UDim2.new(1,0,0,60)
-nameHint.BackgroundTransparency = 1
-nameHint.TextWrapped = true
-nameHint.TextXAlignment = Enum.TextXAlignment.Left
-nameHint.TextYAlignment = Enum.TextYAlignment.Top
-nameHint.Font = FONT_UI
-nameHint.TextSize = 12
-nameHint.TextColor3 = Color3.fromRGB(170,170,170)
-nameHint.Text = "APPLY: hide all in-game tags (local) + show custom tag.\nHIDE ONLY: hide all tags (no custom).\nRESET: restore original."
-nameHint.ZIndex = 202
-
-local dnBox = makeClippedBox(nameBody, 2, "Custom Display Name", "")
-local unBox = makeClippedBox(nameBody, 3, "Custom Username", "")
-
-local row1 = Instance.new("Frame", nameBody)
-row1.LayoutOrder = 4
-row1.Size = UDim2.new(1,0,0,40)
-row1.BackgroundTransparency = 1
-
-local function makeHalfBox(parent, left, placeholder, defaultText)
-	local holder = Instance.new("Frame", parent)
-	holder.Size = UDim2.new(0.5, -6, 1, 0)
-	holder.Position = UDim2.new(left and 0 or 0.5, left and 0 or 6, 0, 0)
-	holder.BackgroundColor3 = Color3.fromRGB(45,45,55)
-	holder.BorderSizePixel = 0
-	holder.ClipsDescendants = true
-	holder.ZIndex = 202
-	setCorner(holder, 10)
-
-	local box = Instance.new("TextBox", holder)
-	box.Size = UDim2.new(1,-20,1,0)
-	box.Position = UDim2.new(0,10,0,0)
-	box.BackgroundTransparency = 1
-	box.PlaceholderText = placeholder
-	box.Text = defaultText or ""
-	box.ClearTextOnFocus = false
-	box.Font = FONT_UI
-	box.TextSize = 14
-	box.TextColor3 = Color3.new(1,1,1)
-	box.TextXAlignment = Enum.TextXAlignment.Left
-	box.ZIndex = 203
-	return box
-end
-
-local offsetBox = makeHalfBox(row1, true,  "Height Y (studs)", tostring(VisualName.yOffset))
-local outlineBox= makeHalfBox(row1, false, "Outline 0-1", tostring(VisualName.outline))
-
-local fontBtn = Instance.new("TextButton", nameBody)
-fontBtn.LayoutOrder = 5
-fontBtn.Size = UDim2.new(1,0,0,40)
-fontBtn.Text = "Font: BOLD"
-fontBtn.Font = FONT_UI
-fontBtn.TextSize = 14
-fontBtn.TextColor3 = Color3.new(1,1,1)
-fontBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-setCorner(fontBtn, 12)
-applyButtonFX(fontBtn, Color3.fromRGB(70,70,90), Color3.fromRGB(90,90,115), Color3.fromRGB(55,55,70))
-
-local row2 = Instance.new("Frame", nameBody)
-row2.LayoutOrder = 6
-row2.Size = UDim2.new(1,0,0,40)
-row2.BackgroundTransparency = 1
-
-local applyBtn = Instance.new("TextButton", row2)
-applyBtn.Size = UDim2.new(0.5, -6, 1, 0)
-applyBtn.Position = UDim2.new(0,0,0,0)
-applyBtn.Text = "APPLY"
-applyBtn.Font = FONT_UI
-applyBtn.TextSize = 14
-applyBtn.TextColor3 = Color3.new(1,1,1)
-applyBtn.BackgroundColor3 = Color3.fromRGB(70,140,90)
-setCorner(applyBtn, 12)
-applyButtonFX(applyBtn, Color3.fromRGB(70,140,90), Color3.fromRGB(90,160,110), Color3.fromRGB(55,110,75))
-
-local hideOnlyBtn = Instance.new("TextButton", row2)
-hideOnlyBtn.Size = UDim2.new(0.5, -6, 1, 0)
-hideOnlyBtn.Position = UDim2.new(0.5, 6, 0, 0)
-hideOnlyBtn.Text = "HIDE ONLY"
-hideOnlyBtn.Font = FONT_UI
-hideOnlyBtn.TextSize = 14
-hideOnlyBtn.TextColor3 = Color3.new(1,1,1)
-hideOnlyBtn.BackgroundColor3 = Color3.fromRGB(90,90,115)
-setCorner(hideOnlyBtn, 12)
-applyButtonFX(hideOnlyBtn, Color3.fromRGB(90,90,115), Color3.fromRGB(110,110,135), Color3.fromRGB(70,70,90))
-
-local resetBtn = Instance.new("TextButton", nameBody)
-resetBtn.LayoutOrder = 7
-resetBtn.Size = UDim2.new(1,0,0,40)
-resetBtn.Text = "RESET"
-resetBtn.Font = FONT_UI
-resetBtn.TextSize = 14
-resetBtn.TextColor3 = Color3.new(1,1,1)
-resetBtn.BackgroundColor3 = Color3.fromRGB(180,120,60)
-setCorner(resetBtn, 12)
-applyButtonFX(resetBtn, Color3.fromRGB(180,120,60), Color3.fromRGB(200,140,80), Color3.fromRGB(150,90,40))
-
---==================== Minimize / Hide UI ============
-local function toggleMinimize()
-	if minimized then
-		frame.Size = normalSize
-		scroll.Visible = true
-		minimizeBtn.Text = "−"
+--==================================================
+-- UI HELPERS
+--==================================================
+local function setPreview(target, errMsg)
+	if target then
+		currentTarget = target
+		avatarImg.Image = target.Thumbnail or ""
+		nameLabel.Text = "Name: " .. (target.Name or "-")
+		idLabel.Text = "UserId: " .. tostring(target.UserId or "-")
+		statusLabel.TextColor3 = GREEN
+		statusLabel.Text = "Status: ready (press Copy)"
+		setButtonEnabled(updateBtn, true)
 	else
-		normalSize = frame.Size
-		frame.Size = UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 44)
-		scroll.Visible = false
-		namePanel.Visible = false
-		minimizeBtn.Text = "+"
-	end
-	minimized = not minimized
-end
-
-local function toggleUIHidden()
-	uiHidden = not uiHidden
-	gui.Enabled = not uiHidden
-end
-
---==================== Main UI logic =================
-local selectedUserId, selectedUsername
-
-local function setPreview(userId, username)
-	selectedUserId = userId
-	selectedUsername = username
-
-	nameLbl.Text = username
-	idLbl.Text = "UserId: " .. tostring(userId)
-
-	local okThumb, img = pcall(function()
-		local url, _ready = Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size180x180)
-		return url
-	end)
-	if okThumb and img then
-		thumb.Image = img
+		currentTarget = nil
+		avatarImg.Image = ""
+		nameLabel.Text = "Name: -"
+		idLabel.Text = "UserId: -"
+		statusLabel.TextColor3 = Color3.fromRGB(200, 80, 80)
+		statusLabel.Text = "Status: " .. (errMsg or "not found")
+		setButtonEnabled(updateBtn, false)
 	end
 end
 
-local function clearPreview()
-	selectedUserId = nil
-	selectedUsername = nil
-	nameLbl.Text = "No target selected"
-	idLbl.Text = "UserId: -"
-	thumb.Image = ""
-end
-
+--==================================================
+-- ACTIONS
+--==================================================
 local function doSearch()
-	setStatus("Searching...")
-	local ok, a, b = resolveTarget(inputBox.Text)
-	if not ok then
-		clearPreview()
-		setStatus(a)
+	if searching then return end
+	searching = true
+	setButtonEnabled(searchBtn, false)
+	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+	statusLabel.Text = "Status: searching..."
+
+	local query = usernameInput.Text
+	local target, err = resolveTarget(query)
+
+	if target then
+		usernameInput.Text = target.Name
+		setPreview(target)
+	else
+		setPreview(nil, err)
+		sendNotif("Morph Avatar", err or "Search failed.", "")
+	end
+
+	setButtonEnabled(searchBtn, true)
+	searching = false
+end
+
+local function doUpdate()
+	if applying then return end
+	if not currentTarget then
+		sendNotif("Morph Avatar", "Search target dulu.", "")
 		return
 	end
-	setPreview(a, b)
-	setStatus("Target loaded.")
+
+	applying = true
+	setButtonEnabled(updateBtn, false)
+	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+	statusLabel.Text = "Status: applying..."
+
+	local ok, err = morphToUserId(currentTarget.UserId, currentTarget.Name, currentTarget.Thumbnail)
+	if ok then
+		statusLabel.TextColor3 = GREEN
+		statusLabel.Text = "Status: applied"
+		if selectedPackName then
+			task.delay(0.35, function()
+				applyPack(selectedPackName)
+				updatePackLabel()
+			end)
+		end
+	else
+		statusLabel.TextColor3 = Color3.fromRGB(200, 80, 80)
+		statusLabel.Text = "Status: " .. (err or "failed")
+		sendNotif("Morph Avatar", err or "Failed to apply.", "")
+		setButtonEnabled(updateBtn, true)
+	end
+
+	applying = false
 end
 
 searchBtn.MouseButton1Click:Connect(doSearch)
-inputBox.FocusLost:Connect(function(enterPressed)
-	if enterPressed then doSearch() end
-end)
+updateBtn.MouseButton1Click:Connect(doUpdate)
 
-hideBtn.MouseButton1Click:Connect(function()
-	Overlay.hideSelf = not Overlay.hideSelf
-	setLocalHideSelf(Overlay.hideSelf)
-	hideBtn.Text = "Hide My Character: " .. (Overlay.hideSelf and "ON" or "OFF")
-end)
-
-spawnBtn.MouseButton1Click:Connect(function()
-	if not selectedUserId then
-		setStatus("Pick a target first.")
-		return
-	end
-	setLocalHideSelf(Overlay.hideSelf)
-
-	local ok = spawnOverlay(selectedUserId, selectedUsername or tostring(selectedUserId), setStatus)
-	if ok then hintLbl.Text = "Overlay running (pose mirrored)" end
-end)
-
-removeBtn.MouseButton1Click:Connect(function()
-	destroyOverlay()
-	setStatus("Overlay removed.")
-	hintLbl.Text = "Spawn overlay to preview"
-end)
-
-minimizeBtn.MouseButton1Click:Connect(toggleMinimize)
-
-idBtn.MouseButton1Click:Connect(function()
-	namePanel.Visible = not namePanel.Visible
-	if namePanel.Visible then
-		dnBox.Text = VisualName.displayName or ""
-		unBox.Text = VisualName.userName or ""
-		offsetBox.Text = tostring(VisualName.yOffset)
-		outlineBox.Text = tostring(VisualName.outline)
-		fontBtn.Text = "Font: " .. (VisualName.fontMode == "BLACK" and "BLACK" or "BOLD")
+usernameInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		doSearch()
 	end
 end)
 
-nameClose.MouseButton1Click:Connect(function()
-	namePanel.Visible = false
+packSearch:GetPropertyChangedSignal("Text"):Connect(function()
+	filterPackButtons(packSearch.Text)
 end)
 
-fontBtn.MouseButton1Click:Connect(function()
-    VisualName.fontMode = (VisualName.fontMode == "BLACK") and "BOLD" or "BLACK"
-    fontBtn.Text = "Font: " .. VisualName.fontMode
-
-    if VisualName.enabled and VisualName.mode == "CUSTOM" then
-        enableNametagReplace(VisualName.displayName or "", VisualName.userName or "")
-    end
-end)
-
-applyBtn.MouseButton1Click:Connect(function()
-	local dn = tostring(dnBox.Text or ""):gsub("^%s+",""):gsub("%s+$","")
-	local un = tostring(unBox.Text or ""):gsub("^%s+",""):gsub("%s+$","")
-
-	-- IMPORTANT: no auto-fill
-	-- empty means "do not show that line"
-
-	VisualName.yOffset = math.clamp(safeNumber(offsetBox.Text, VisualName.yOffset), -10, 50)
-	VisualName.outline = math.clamp(safeNumber(outlineBox.Text, VisualName.outline), 0, 1)
-
-	enableNametagReplace(dn, un)
-	setStatus(("Nametag replaced (local): %s (@%s)"):format(dn, un))
-	namePanel.Visible = false
-end)
-
-hideOnlyBtn.MouseButton1Click:Connect(function()
-	VisualName.yOffset = math.clamp(safeNumber(offsetBox.Text, VisualName.yOffset), -10, 50)
-	VisualName.outline = math.clamp(safeNumber(outlineBox.Text, VisualName.outline), 0, 1)
-
-	enableHideOnly()
-	setStatus("In-game nametag hidden (local).")
-	namePanel.Visible = false
-end)
-
-resetBtn.MouseButton1Click:Connect(function()
-	disableNametag()
-	setStatus("Nametag restored.")
-	namePanel.Visible = false
-end)
-
---==================== FIX: NAME PANEL CONTENT ZINDEX ====================
-local function forcePanelZ(root: Instance, baseZ: number)
-	-- root harus lebih rendah dari anak-anaknya
-	if root:IsA("GuiObject") then
-		root.ZIndex = baseZ
-	end
-
-	for _, obj in ipairs(root:GetDescendants()) do
-		if obj:IsA("GuiObject") then
-			-- semua isi panel di atas background panel
-			obj.ZIndex = baseZ + 1
-		end
-	end
-end
-
--- Pastikan namePanel benar-benar berada di atas main UI
-forcePanelZ(namePanel, 240)
-
-
-closeBtn.MouseButton1Click:Connect(function()
-	destroyOverlay()
-	stopHideHooks()
-	disableNametag()
-	gui:Destroy()
-end)
-
--- Keybinds
-UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if UserInputService:GetFocusedTextBox() then return end
-	if input.KeyCode == Enum.KeyCode.Comma then
-		toggleUIHidden()
+--==================================================
+-- RESPAWN REAPPLY
+--==================================================
+player.CharacterAdded:Connect(function()
+	task.wait(0.8)
+	local saved = player:GetAttribute(ATTR_LAST)
+	if type(saved) == "string" and saved ~= "" and PACKS[saved] then
+		selectedPackName = saved
+		updatePackLabel()
+		applyPack(saved)
 	end
 end)
 
--- default setup
-task.spawn(function()
-	task.wait(0.1)
-	setLocalHideSelf(true)
-	setStatus("Ready. Search Username/UserId, then Spawn Overlay.")
+task.defer(function()
+	local saved = player:GetAttribute(ATTR_LAST)
+	if type(saved) == "string" and saved ~= "" and PACKS[saved] then
+		selectedPackName = saved
+		updatePackLabel()
+		task.wait(0.2)
+		applyPack(saved)
+	end
 end)
